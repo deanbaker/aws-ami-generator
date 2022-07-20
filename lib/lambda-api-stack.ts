@@ -1,4 +1,4 @@
-import { LambdaIntegration, MethodLoggingLevel, RestApi } from "aws-cdk-lib/aws-apigateway"
+import { LambdaIntegration, MethodLoggingLevel, RestApi, ApiKey } from "aws-cdk-lib/aws-apigateway"
 import { PolicyStatement } from "aws-cdk-lib/aws-iam"
 import { Function, Runtime, AssetCode, Code } from "aws-cdk-lib/aws-lambda"
 import { Duration, Stack, StackProps } from "aws-cdk-lib"
@@ -20,6 +20,9 @@ export class CDKExampleLambdaApiStack extends Stack {
         this.bucket = new s3.Bucket(this, "WidgetStore")
 
         this.restApi = new RestApi(this, this.stackName + "RestApi", {
+            defaultMethodOptions: {
+                apiKeyRequired: true,
+            },
             deployOptions: {
                 stageName: "beta",
                 metricsEnabled: true,
@@ -28,6 +31,22 @@ export class CDKExampleLambdaApiStack extends Stack {
             },
         })
 
+        const apiKey = this.restApi.addApiKey("amiApiKey", {
+            apiKeyName: "amiApiKey",
+            value: "MyApiKeyThatIsAtLeast20Characters",
+        })
+
+        this.restApi
+            .addUsagePlan("usagePlan", {
+                name: "defaultPlan",
+                apiStages: [
+                    {
+                        stage: this.restApi.deploymentStage,
+                    },
+                ],
+            })
+            .addApiKey(apiKey)
+
         const lambdaPolicy = new PolicyStatement()
         lambdaPolicy.addActions("s3:ListBucket")
         lambdaPolicy.addResources(this.bucket.bucketArn)
@@ -35,7 +54,7 @@ export class CDKExampleLambdaApiStack extends Stack {
         this.lambdaFunction = new Function(this, props.functionName, {
             functionName: props.functionName,
             handler: "handler.handler",
-            runtime: Runtime.NODEJS_10_X,
+            runtime: Runtime.NODEJS_16_X,
             code: new AssetCode(`./src`),
             memorySize: 512,
             timeout: Duration.seconds(10),
